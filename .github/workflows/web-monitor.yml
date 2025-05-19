@@ -1,45 +1,48 @@
 name: Web Monitor
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
   schedule:
-    - cron: '*/10 * * * *'   # Var 10:e minut
+    - cron: '*/10 * * * *'
+  workflow_dispatch:       # Möjliggör manuell körning från GitHub UI
+
+permissions:
+  contents: write          # Viktigt för att kunna pusha filer
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out repository
+      - name: Checkout repository
         uses: actions/checkout@v3
-        with:
-          persist-credentials: false  # för att kunna pusha med egen token
 
-      - name: Set up Python
+      - name: Ensure data folder and files exist
+        run: |
+          mkdir -p data
+          # Skapar tomma filer om de inte finns för att undvika fel i scriptet
+          touch data/seen_products.json
+          touch data/available_products.json
+
+      - name: Set up Python 3.x
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: "3.x"
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+        run: pip install requests
 
       - name: Run monitor script
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          python main.py
+        run: python main.py
 
-      - name: Commit changes to cache files
+      - name: Commit and push updated data files
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add seen_products.json available_products.json || echo "Inga filer att lägga till"
-          git diff --quiet && echo "Inga ändringar att committa" || git commit -m "Uppdaterar cache-filer från workflow"
-          git push origin main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          git add data/seen_products.json data/available_products.json
+          git commit -m "Uppdatera data-filer efter monitor-körning" || echo "Inga ändringar att committa"
+          git push
