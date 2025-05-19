@@ -4,6 +4,7 @@ import hashlib
 import requests
 from datetime import datetime
 from time import sleep
+import time
 
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
@@ -71,10 +72,16 @@ def send_discord_message(prod_id, prod_name, prod_url, event_type):
     }
     try:
         resp = requests.post(DISCORD_WEBHOOK_URL, json=data, timeout=10)
-        if resp.status_code != 204:
+        if resp.status_code == 429:
+            retry_after = resp.json().get("retry_after", 1)
+            print(f"Rate limited. Väntar {retry_after} sekunder...")
+            time.sleep(retry_after)
+            # kan försöka igen här om du vill
+        elif resp.status_code != 204:
             print(f"Discord webhook fel: {resp.status_code} {resp.text}")
     except Exception as e:
         print(f"Discord webhook exception: {e}")
+    time.sleep(1)  # Lägg till generell fördröjning för att undvika rate limit
 
 def main():
     seen_products = load_json(SEEN_PRODUCTS_FILE)
@@ -109,7 +116,11 @@ def main():
         now_ts = datetime.utcnow().timestamp()
         is_released = release_ts <= now_ts
 
-        in_stock = prod.get("stock", {}).get("web", 0) > 0
+        stock = prod.get("stock", [])
+        if isinstance(stock, list) and len(stock) > 0:
+            in_stock = stock[0].get("web", 0) > 0
+        else:
+            in_stock = False
 
         preorder = False
         if not is_released:
