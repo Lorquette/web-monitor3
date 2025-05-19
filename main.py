@@ -36,7 +36,12 @@ def hash_product(prod):
     h = hashlib.sha256()
     h.update(str(prod.get("id")).encode())
     h.update(prod.get("mainTitle", "").encode())
-    h.update(str(prod.get("stock", {}).get("web", 0)).encode())
+    stock = prod.get("stock", [])
+    if isinstance(stock, list) and len(stock) > 0:
+        web_stock = stock[0].get("web", 0)
+    else:
+        web_stock = 0
+    h.update(str(web_stock).encode())
     return h.hexdigest()
 
 def is_preorder(product_url):
