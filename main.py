@@ -9,8 +9,9 @@ DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
 API_BASE = "https://www.webhallen.com/api/productdiscovery/category/4661?page={page}&touchpoint=DESKTOP&totalProductCountSet=true&sortBy=latest"
 
-SEEN_PRODUCTS_FILE = "seen_products.json"
-AVAILABLE_PRODUCTS_FILE = "available_products.json"
+DATA_FOLDER = "data"
+SEEN_PRODUCTS_FILE = os.path.join(DATA_FOLDER, "seen_products.json")
+AVAILABLE_PRODUCTS_FILE = os.path.join(DATA_FOLDER, "available_products.json")
 
 def load_json(file):
     if os.path.exists(file):
@@ -19,6 +20,7 @@ def load_json(file):
     return {}
 
 def save_json(file, data):
+    os.makedirs(DATA_FOLDER, exist_ok=True)  # Säkerställ att mappen finns
     with open(file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
@@ -43,10 +45,10 @@ def is_preorder(product_url):
 
 def send_discord_message(prod_id, prod_name, prod_url, event_type):
     color_map = {
-        "new": 0x1ABC9C,         # Turkos-grön för ny produkt
-        "back_in_stock": 0xE67E22 # Orange för åter i lager
+        "new": 0x1ABC9C,
+        "back_in_stock": 0xE67E22
     }
-    color = color_map.get(event_type, 0x3498DB)  # Standardblå
+    color = color_map.get(event_type, 0x3498DB)
 
     image_url = f"https://cdn.webhallen.com/images/product/{prod_id}?trim"
 
@@ -95,7 +97,7 @@ def main():
         prod_id = str(prod["id"])
         prod_name = prod.get("mainTitle", "Okänt namn")
         prod_url = f"https://www.webhallen.com/se/product/{prod_id}-{prod_name.replace(' ', '-')}"
-        
+
         release_ts = prod.get("release", {}).get("timestamp", 0)
         now_ts = datetime.utcnow().timestamp()
         is_released = release_ts <= now_ts
