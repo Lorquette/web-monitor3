@@ -15,8 +15,15 @@ AVAILABLE_PRODUCTS_FILE = os.path.join(DATA_FOLDER, "available_products.json")
 
 def load_json(file):
     if os.path.exists(file):
-        with open(file, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(file, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if not content:
+                    return {}
+                return json.loads(content)
+        except json.JSONDecodeError:
+            print(f"Varning: ogiltig JSON i fil {file}, returnerar tom dict.")
+            return {}
     return {}
 
 def save_json(file, data):
