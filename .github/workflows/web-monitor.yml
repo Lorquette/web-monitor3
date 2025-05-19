@@ -21,9 +21,9 @@ jobs:
       - name: Ensure data folder and files exist
         run: |
           mkdir -p data
-          # Skapar tomma filer om de inte finns för att undvika fel i scriptet
-          touch data/seen_products.json
-          touch data/available_products.json
+          # Skapa filer med giltig tom JSON "{}" om de inte finns
+          if [ ! -s data/seen_products.json ]; then echo "{}" > data/seen_products.json; fi
+          if [ ! -s data/available_products.json ]; then echo "{}" > data/available_products.json; fi
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v4
