@@ -61,20 +61,18 @@ def is_preorder(product_url):
         print(f"Fel vid preorder-check för {product_url}: {e}")
     return False
 
-def send_discord_message(prod_id, prod_name, prod_url, event_type, price):
+def send_discord_message(prod_id, prod_name, prod_url, event_type, price, image_url):
     color_map = {
         "new": 0x1ABC9C,
         "back_in_stock": 0xE67E22
     }
     color = color_map.get(event_type, 0x3498DB)
 
-    image_url = f"https://cdn.webhallen.com/images/product/{prod_id}?trim"
-
     data = {
         "embeds": [{
-            "title": f"{'🎉 NY PRODUKT' if event_type == 'new' else '✅ PRODUKT TILLGÄNGLIG IGEN'}",
+            "title": f"{'🎉 NY PRODUKT: ' if event_type == 'new' else '✅ PRODUKT TILLGÄNGLIG IGEN: '}{prod_name}",
             "url": prod_url,
-            "description": f"**{prod_name}**\n💰 Pris: {price} kr",
+            "description": f"💰 Pris: {price} kr",
             "color": color,
             "image": {"url": image_url},
             "footer": {"text": "Webhallen Product Monitor"},
@@ -117,7 +115,10 @@ def main():
         prod_name = prod.get("mainTitle", "Okänt namn")
         safe_name = slugify(prod_name)
         prod_url = f"https://www.webhallen.com/se/product/{prod_id}-{safe_name}"
+        images = prod.get("images", [])
+        image_url = images[0]["url"] if images else f"https://cdn.webhallen.com/images/product/{prod_id}?trim"
 
+        
         release_ts = prod.get("release", {}).get("timestamp", 0)
         now_ts = datetime.utcnow().timestamp()
         is_released = release_ts <= now_ts
@@ -132,16 +133,24 @@ def main():
         if not is_released:
             preorder = is_preorder(prod_url)
 
-        price = prod.get("price", {}).get("current", {}).get("value", "Okänt")
+        price = "Okänt"
+        price_info = prod.get("price", {})
+        if isinstance(price_info, dict):
+            if "current" in price_info and isinstance(price_info["current"], dict) and "value" in price_info["current"]:
+                price = price_info["current"]["value"]
+            elif "price" in price_info:
+                price = price_info["price"]
+            elif "currentPrice" in price_info:
+                price = price_info["currentPrice"]
 
         prod_hash = hash_product(prod)
 
         if prod_id not in seen_products:
-            send_discord_message(prod_id, prod_name, prod_url, "new", price)
+            send_discord_message(prod_id, prod_name, prod_url, "new", price, image_url)
         else:
             prev_in_stock = available_products.get(prod_id, False)
             if not prev_in_stock and (in_stock or preorder):
-                send_discord_message(prod_id, prod_name, prod_url, "back_in_stock", price)
+                send_discord_message(prod_id, prod_name, prod_url, "back_in_stock", price, image_url)
 
         new_seen_products[prod_id] = prod_hash
         new_available_products[prod_id] = in_stock or preorder
