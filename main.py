@@ -32,8 +32,11 @@ def hash_product(prod):
     h = hashlib.sha256()
     h.update(str(prod.get("id")).encode())
     h.update(prod.get("mainTitle", "").encode())
+
     stock_data = prod.get("stock", {})
-    in_stock = stock_data.get("web", 0) > 0
+    if not isinstance(stock_data, dict):
+        stock_data = {}
+
     h.update(str(stock_data.get("web", 0)).encode())
     return h.hexdigest()
 
@@ -119,10 +122,11 @@ def main():
         is_released = release_ts <= now_ts
 
         stock_data = prod.get("stock", {})
-        if isinstance(stock_data, list):
+        if not isinstance(stock_data, dict):
             stock_data = {}
-
+        
         in_stock = stock_data.get("web", 0) > 0
+
 
         preorder = False
         if not is_released:
