@@ -41,6 +41,19 @@ def hash_product(prod):
     return h.hexdigest()
 
 def slugify(text):
+    text = text.lower()
+    # Ersätt svenska specialtecken med ascii-liknande tecken
+    replacements = {
+        "å": "a",
+        "ä": "a",
+        "ö": "o",
+        "Å": "a",
+        "Ä": "a",
+        "Ö": "o",
+    }
+    for search, replace in replacements.items():
+        text = text.replace(search, replace)
+
     text = text.replace("&", "")
     text = text.replace(":", "")
     text = text.replace(".", "-")
@@ -61,7 +74,7 @@ def is_preorder(product_url):
         print(f"Fel vid preorder-check för {product_url}: {e}")
     return False
 
-def send_discord_message(prod_id, prod_name, prod_url, event_type, price, image_url):
+def send_discord_message(prod_id, prod_name, prod_url, event_type, price):
     color_map = {
         "new": 0x1ABC9C,
         "back_in_stock": 0xE67E22
@@ -70,11 +83,10 @@ def send_discord_message(prod_id, prod_name, prod_url, event_type, price, image_
 
     data = {
         "embeds": [{
-            "title": f"{'🎉 NY PRODUKT: ' if event_type == 'new' else '✅ PRODUKT TILLGÄNGLIG IGEN: '}{prod_name}",
+            "title": f"{'🎉 NY PRODUKT: ' if event_type == 'new' else '✅ TILLBAKA I LAGER: '}{prod_name}",
             "url": prod_url,
             "description": f"💰 Pris: {price} kr",
             "color": color,
-            "image": {"url": image_url},
             "footer": {"text": "Webhallen Product Monitor"},
             "timestamp": datetime.utcnow().isoformat()
         }]
@@ -146,11 +158,11 @@ def main():
         prod_hash = hash_product(prod)
 
         if prod_id not in seen_products:
-            send_discord_message(prod_id, prod_name, prod_url, "new", price, image_url)
+            send_discord_message(prod_id, prod_name, prod_url, "new", price)
         else:
             prev_in_stock = available_products.get(prod_id, False)
             if not prev_in_stock and (in_stock or preorder):
-                send_discord_message(prod_id, prod_name, prod_url, "back_in_stock", price, image_url)
+                send_discord_message(prod_id, prod_name, prod_url, "back_in_stock", price)
 
         new_seen_products[prod_id] = prod_hash
         new_available_products[prod_id] = in_stock or preorder
