@@ -61,7 +61,7 @@ def is_preorder(product_url):
         print(f"Fel vid preorder-check för {product_url}: {e}")
     return False
 
-def send_discord_message(prod_id, prod_name, prod_url, event_type):
+def send_discord_message(prod_id, prod_name, prod_url, event_type, price):
     color_map = {
         "new": 0x1ABC9C,
         "back_in_stock": 0xE67E22
@@ -72,8 +72,9 @@ def send_discord_message(prod_id, prod_name, prod_url, event_type):
 
     data = {
         "embeds": [{
-            "title": f"{'🎉 NY PRODUKT' if event_type == 'new' else '✅ PRODUKT TILLGÄNGLIG IGEN'}: {prod_name}",
+            "title": f"{'🎉 NY PRODUKT' if event_type == 'new' else '✅ PRODUKT TILLGÄNGLIG IGEN'}",
             "url": prod_url,
+            "description": f"**{prod_name}**\n💰 Pris: {price} kr",
             "color": color,
             "image": {"url": image_url},
             "footer": {"text": "Webhallen Product Monitor"},
@@ -127,19 +128,20 @@ def main():
         
         in_stock = stock_data.get("web", 0) > 0
 
-
         preorder = False
         if not is_released:
             preorder = is_preorder(prod_url)
 
+        price = prod.get("price", {}).get("current", {}).get("value", "Okänt")
+
         prod_hash = hash_product(prod)
 
         if prod_id not in seen_products:
-            send_discord_message(prod_id, prod_name, prod_url, "new")
+            send_discord_message(prod_id, prod_name, prod_url, "new", price)
         else:
             prev_in_stock = available_products.get(prod_id, False)
             if not prev_in_stock and (in_stock or preorder):
-                send_discord_message(prod_id, prod_name, prod_url, "back_in_stock")
+                send_discord_message(prod_id, prod_name, prod_url, "back_in_stock", price)
 
         new_seen_products[prod_id] = prod_hash
         new_available_products[prod_id] = in_stock or preorder
