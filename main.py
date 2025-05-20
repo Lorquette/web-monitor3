@@ -2,9 +2,9 @@ import os
 import json
 import hashlib
 import requests
+import re
 from datetime import datetime
 from time import sleep
-import time
 
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
@@ -16,19 +16,15 @@ AVAILABLE_PRODUCTS_FILE = os.path.join(DATA_FOLDER, "available_products.json")
 
 def load_json(file):
     if os.path.exists(file):
-        try:
-            with open(file, "r", encoding="utf-8") as f:
-                content = f.read().strip()
-                if not content:
-                    return {}
-                return json.loads(content)
-        except json.JSONDecodeError:
-            print(f"Varning: ogiltig JSON i fil {file}, returnerar tom dict.")
-            return {}
+        with open(file, "r", encoding="utf-8") as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return {}
     return {}
 
 def save_json(file, data):
-    os.makedirs(DATA_FOLDER, exist_ok=True)  # Säkerställ att mappen finns
+    os.makedirs(DATA_FOLDER, exist_ok=True)
     with open(file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
@@ -36,13 +32,19 @@ def hash_product(prod):
     h = hashlib.sha256()
     h.update(str(prod.get("id")).encode())
     h.update(prod.get("mainTitle", "").encode())
-    stock = prod.get("stock", [])
-    if isinstance(stock, list) and len(stock) > 0:
-        web_stock = stock[0].get("web", 0)
-    else:
-        web_stock = 0
-    h.update(str(web_stock).encode())
+    stock_data = prod.get("stock", {})
+    in_stock = stock_data.get("web", 0) > 0
+    h.update(str(stock_data.get("web", 0)).encode())
     return h.hexdigest()
+
+def slugify(text):
+    text = text.replace("&", "")
+    text = text.replace(":", "")
+    text = text.replace(".", "-")
+    text = re.sub(r"[()]", "", text)
+    text = re.sub(r"[^\w\s-]", "", text)
+    text = re.sub(r"\s+", "-", text)
+    return text
 
 def is_preorder(product_url):
     try:
@@ -77,16 +79,10 @@ def send_discord_message(prod_id, prod_name, prod_url, event_type):
     }
     try:
         resp = requests.post(DISCORD_WEBHOOK_URL, json=data, timeout=10)
-        if resp.status_code == 429:
-            retry_after = resp.json().get("retry_after", 1)
-            print(f"Rate limited. Väntar {retry_after} sekunder...")
-            time.sleep(retry_after)
-            # kan försöka igen här om du vill
-        elif resp.status_code != 204:
+        if resp.status_code != 204:
             print(f"Discord webhook fel: {resp.status_code} {resp.text}")
     except Exception as e:
         print(f"Discord webhook exception: {e}")
-    time.sleep(1)  # Lägg till generell fördröjning för att undvika rate limit
 
 def main():
     seen_products = load_json(SEEN_PRODUCTS_FILE)
@@ -115,17 +111,18 @@ def main():
     for prod in all_products:
         prod_id = str(prod["id"])
         prod_name = prod.get("mainTitle", "Okänt namn")
-        prod_url = f"https://www.webhallen.com/se/product/{prod_id}-{prod_name.replace(' ', '-')}"
+        safe_name = slugify(prod_name)
+        prod_url = f"https://www.webhallen.com/se/product/{prod_id}-{safe_name}"
 
         release_ts = prod.get("release", {}).get("timestamp", 0)
         now_ts = datetime.utcnow().timestamp()
         is_released = release_ts <= now_ts
 
-        stock = prod.get("stock", [])
-        if isinstance(stock, list) and len(stock) > 0:
-            in_stock = stock[0].get("web", 0) > 0
-        else:
-            in_stock = False
+        stock_data = prod.get("stock", {})
+        if isinstance(stock_data, list):
+            stock_data = {}
+
+        in_stock = stock_data.get("web", 0) > 0
 
         preorder = False
         if not is_released:
